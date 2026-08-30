@@ -69,6 +69,7 @@ def verificar_posicion_abierta(symbol):
     return valor_en_usdt > 5.0
 
 def analizar_y_operar(symbol):
+    print(f"--- Analizando {symbol} [{time.strftime('%H:%M:%S')}] ---")
     df = obtener_datos_mercado(symbol, TIMEFRAME)
     df = calcular_indicadores(df)
     
@@ -80,42 +81,47 @@ def analizar_y_operar(symbol):
     
     posicion_activa = verificar_posicion_abierta(symbol)
     
-    # Condición de Compra: Tendencia alcista (SMA50 > SMA200) y RSI en zona favorable (< 60)
-    if not posicion_activa:
-        if sma_50 > sma_200 and rsi_actual < 60:
-            saldo_usdt = float(client.get_asset_balance(asset="USDT")["free"])
-            if saldo_usdt >= MONTO_INVERSION:
-                order = client.create_order(
-                    symbol=symbol,
-                    side=SIDE_BUY,
-                    type=ORDER_TYPE_MARKET,
-                    quoteOrderQty=MONTO_INVERSION
-                )
-                
-                precio_compra = float(order['fills'][0]['price']) if order.get('fills') else precio_actual
-                stop_loss = precio_compra * (1 - STOP_LOSS_PCT)
-                take_profit = precio_compra * (1 + TAKE_PROFIT_PCT)
-                
-                # Configurar OCO Order (Stop Loss + Take Profit)
-                client.create_oco_order(
-                    symbol=symbol,
-                    side=SIDE_SELL,
-                    quantity=order['executedQty'],
-                    price=f"{take_profit:.2f}",
-                    stopPrice=f"{stop_loss:.2f}",
-                    stopLimitPrice=f"{stop_loss * 0.995:.2f}",
-                    stopLimitTimeInForce=TIME_IN_FORCE_GTC
-                )
-                
-                msg = (f"🚀 *ORDEN DE COMPRA EJECUTADA EN {symbol}*\n\n"
-                       f"• Precio Entrada: ${precio_compra:.2f}\n"
-                       f"• Take Profit: ${take_profit:.2f}\n"
-                       f"• Stop Loss: ${stop_loss:.2f}\n"
-                       f"• Inversión: ${MONTO_INVERSION} USDT")
-                enviar_telegram(msg)
-            else:
-                print(f"[-] Saldo insuficiente de USDT para operar en {symbol}.")
+    if posicion_activa:
+        print(f"[-] Posición activa en {symbol}. Omitiendo...")
+        return
 
+    # Condición de Compra: Tendencia alcista (SMA50 > SMA200) y RSI en zona favorable (< 60)
+    if sma_50 > sma_200 and rsi_actual < 60:
+        saldo_usdt = float(client.get_asset_balance(asset="USDT")["free"])
+        if saldo_usdt >= MONTO_INVERSION:
+            order = client.create_order(
+                symbol=symbol,
+                side=SIDE_BUY,
+                type=ORDER_TYPE_MARKET,
+                quoteOrderQty=MONTO_INVERSION
+            )
+            
+            precio_compra = float(order['fills'][0]['price']) if order.get('fills') else precio_actual
+            stop_loss = precio_compra * (1 - STOP_LOSS_PCT)
+            take_profit = precio_compra * (1 + TAKE_PROFIT_PCT)
+            
+            # Configurar OCO Order (Stop Loss + Take Profit)
+            client.create_oco_order(
+                symbol=symbol,
+                side=SIDE_SELL,
+                quantity=order['executedQty'],
+                price=f"{take_profit:.2f}",
+                stopPrice=f"{stop_loss:.2f}",
+                stopLimitPrice=f"{stop_loss * 0.995:.2f}",
+                stopLimitTimeInForce=TIME_IN_FORCE_GTC
+            )
+            
+            msg = (f"🚀 *ORDEN DE COMPRA EJECUTADA EN {symbol}*\n\n"
+                   f"• Precio Entrada: ${precio_compra:.2f}\n"
+                   f"• Take Profit: ${take_profit:.2f}\n"
+                   f"• Stop Loss: ${stop_loss:.2f}\n"
+                   f"• Inversión: ${MONTO_INVERSION} USDT")
+            enviar_telegram(msg)
+        else:
+            print(f"[-] Saldo insuficiente de USDT para operar en {symbol}.")
+    else:
+        print(f"[i] {symbol}: Sin señal de compra (RSI: {rsi_actual:.1f} | SMA50: {sma_50:.2f} | SMA200: {sma_200:.2f})")
+        
 # ==========================================
 # BUCLE PRINCIPAL
 # ==========================================

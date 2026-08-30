@@ -13,11 +13,12 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-SIMBOLOS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
-TIMEFRAME = "1h"
-MONTO_INVERSION = 20     # USDT por operación
-STOP_LOSS_PCT = 0.05     # 5%
-TAKE_PROFIT_PCT = 0.10   # 10%
+# Activos volátiles para operar intradía
+SIMBOLOS = ["PEPEUSDT", "SUIUSDT", "NEARUSDT"]
+TIMEFRAME = "15m"         # Velas de 15 minutos (1-3 entradas diarias estimadas)
+MONTO_INVERSION = 10     # Mínimo permitido por Binance (MIN_NOTIONAL)
+STOP_LOSS_PCT = 0.015    # Stop Loss acotado (1.5%)
+TAKE_PROFIT_PCT = 0.025   # Take Profit acotado (2.5%)
 
 # ==========================================
 # FUNCIONES AUXILIARES
@@ -66,7 +67,20 @@ def verificar_posicion_abierta(symbol):
     balance = float(client.get_asset_balance(asset=asset)["free"])
     ticker_precio = float(client.get_symbol_ticker(symbol=symbol)["price"])
     valor_en_usdt = balance * ticker_precio
-    return valor_en_usdt > 5.0
+    return valor_en_usdt > 3.0
+
+def dar_formato_precio(symbol, price):
+    info = client.get_symbol_info(symbol)
+    precision = 2
+    for f in info['filters']:
+        if f['filterType'] == 'PRICE_FILTER':
+            tick_size = float(f['tickSize'])
+            if tick_size < 1:
+                precision = len(str(tick_size).split('.')[1].rstrip('0'))
+            else:
+                precision = 0
+            break
+    return f"{price:.{precision}f}"
 
 def analizar_y_operar(symbol):
     print(f"--- Analizando {symbol} [{time.strftime('%H:%M:%S')}] ---")
@@ -85,7 +99,7 @@ def analizar_y_operar(symbol):
         print(f"[-] Posición activa en {symbol}. Omitiendo...")
         return
 
-    # Condición de Compra: Tendencia alcista (SMA50 > SMA200) y RSI en zona favorable (< 60)
+    # Condición de Compra Intradía: SMA50 > SMA200 y RSI < 60
     if sma_50 > sma_200 and rsi_actual < 60:
         saldo_usdt = float(client.get_asset_balance(asset="USDT")["free"])
         if saldo_usdt >= MONTO_INVERSION:
@@ -100,34 +114,39 @@ def analizar_y_operar(symbol):
             stop_loss = precio_compra * (1 - STOP_LOSS_PCT)
             take_profit = precio_compra * (1 + TAKE_PROFIT_PCT)
             
+            # Dar formato de precisión según el par
+            tp_str = dar_formato_precio(symbol, take_profit)
+            sl_str = dar_formato_precio(symbol, stop_loss)
+            sl_limit_str = dar_formato_precio(symbol, stop_loss * 0.995)
+            
             # Configurar OCO Order (Stop Loss + Take Profit)
             client.create_oco_order(
                 symbol=symbol,
                 side=SIDE_SELL,
                 quantity=order['executedQty'],
-                price=f"{take_profit:.2f}",
-                stopPrice=f"{stop_loss:.2f}",
-                stopLimitPrice=f"{stop_loss * 0.995:.2f}",
+                price=tp_str,
+                stopPrice=sl_str,
+                stopLimitPrice=sl_limit_str,
                 stopLimitTimeInForce=TIME_IN_FORCE_GTC
             )
             
             msg = (f"🚀 *ORDEN DE COMPRA EJECUTADA EN {symbol}*\n\n"
-                   f"• Precio Entrada: ${precio_compra:.2f}\n"
-                   f"• Take Profit: ${take_profit:.2f}\n"
-                   f"• Stop Loss: ${stop_loss:.2f}\n"
+                   f"• Precio Entrada: ${dar_formato_precio(symbol, precio_compra)}\n"
+                   f"• Take Profit (+2.5%): ${tp_str}\n"
+                   f"• Stop Loss (-1.5%): ${sl_str}\n"
                    f"• Inversión: ${MONTO_INVERSION} USDT")
             enviar_telegram(msg)
         else:
             print(f"[-] Saldo insuficiente de USDT para operar en {symbol}.")
     else:
-        print(f"[i] {symbol}: Sin señal de compra (RSI: {rsi_actual:.1f} | SMA50: {sma_50:.2f} | SMA200: {sma_200:.2f})")
-        
+        print(f"[i] {symbol}: Sin señal de compra (RSI: {rsi_actual:.1f} | SMA50: {sma_50:.6f} | SMA200: {sma_200:.6f})")
+
 # ==========================================
 # BUCLE PRINCIPAL
 # ==========================================
 if __name__ == "__main__":
     ip_servidor = obtener_ip_publica()
-    msg_inicio = f"🤖 *BOT INICIADO EN RAILWAY*\n\n📍 *IP de salida:* `{ip_servidor}`"
+    msg_inicio = f"🤖 *BOT REINICIADO (ESTRATEGIAS INTRADÍA)*\n\n📍 *IP de salida:* `{ip_servidor}`"
     print(msg_inicio)
     enviar_telegram(msg_inicio)
     

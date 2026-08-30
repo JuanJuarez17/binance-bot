@@ -63,11 +63,19 @@ def calcular_indicadores(df):
     return df
 
 def verificar_posicion_abierta(symbol):
-    asset = symbol.replace("USDT", "")
-    balance = float(client.get_asset_balance(asset=asset)["free"])
-    ticker_precio = float(client.get_symbol_ticker(symbol=symbol)["price"])
-    valor_en_usdt = balance * ticker_precio
-    return valor_en_usdt > 3.0
+    try:
+        asset = symbol.replace("USDT", "")
+        account_info = client.get_account()
+        for b in account_info['balances']:
+            if b['asset'] == asset:
+                balance = float(b['free'])
+                ticker_precio = float(client.get_symbol_ticker(symbol=symbol)["price"])
+                valor_en_usdt = balance * ticker_precio
+                return valor_en_usdt > 3.0
+        return False
+    except Exception as e:
+        print(f"[X] Error al verificar posición: {e}")
+        return False
 
 def dar_formato_precio(symbol, price):
     info = client.get_symbol_info(symbol)
@@ -140,7 +148,7 @@ def analizar_y_operar(symbol):
             print(f"[-] Saldo insuficiente de USDT para operar en {symbol}.")
     else:
         print(f"[i] {symbol}: Sin señal de compra (RSI: {rsi_actual:.1f} | SMA50: {sma_50:.6f} | SMA200: {sma_200:.6f})")
-
+        
 # ==========================================
 # BUCLE PRINCIPAL
 # ==========================================

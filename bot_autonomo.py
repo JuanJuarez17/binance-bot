@@ -66,7 +66,6 @@ def verificar_posicion_abierta(symbol):
         account_info = client.get_account()
         for b in account_info['balances']:
             if b['asset'] == asset:
-                # Suma el saldo LIBRE + el saldo BLOQUEADO en órdenes OCO
                 balance_total = float(b['free']) + float(b['locked'])
                 ticker_precio = float(client.get_symbol_ticker(symbol=symbol)["price"])
                 valor_en_usdt = balance_total * ticker_precio
@@ -88,6 +87,19 @@ def dar_formato_precio(symbol, price):
                 precision = 0
             break
     return f"{price:.{precision}f}"
+
+def dar_formato_cantidad(symbol, quantity):
+    info = client.get_symbol_info(symbol)
+    precision = 0
+    for f in info['filters']:
+        if f['filterType'] == 'LOT_SIZE':
+            step_size = float(f['stepSize'])
+            if step_size < 1:
+                precision = len(str(step_size).split('.')[1].rstrip('0'))
+            else:
+                precision = 0
+            break
+    return f"{quantity:.{precision}f}"
 
 def analizar_y_operar(symbol):
     print(f"--- Analizando {symbol} [{time.strftime('%H:%M:%S')}] ---")
@@ -125,25 +137,21 @@ def analizar_y_operar(symbol):
             sl_str = dar_formato_precio(symbol, stop_loss)
             sl_limit_str = dar_formato_precio(symbol, stop_loss * 0.995)
             
-            # Orden OCO adaptada a los estándares de API
-            client.create_order(
-                symbol=symbol,
-                side=SIDE_SELL,
-                type='STOP_LOSS_LIMIT',
-                timeInForce=TIME_IN_FORCE_GTC,
-                quantity=order['executedQty'],
-                price=sl_limit_str,
-                stopPrice=sl_str
-            )
+            # Ajustar la cantidad exacta disponible descontando comisiones
+            asset = symbol.replace("USDT", "")
+            time.sleep(1) # Breve pausa para actualización de balance en Binance
+            balance_disponible = float(client.get_asset_balance(asset=asset)["free"])
+            qty_str = dar_formato_cantidad(symbol, balance_disponible)
             
-            # Orden Limit para Take Profit
-            client.create_order(
+            # Orden OCO Nativa Unificada
+            client.create_oco_order(
                 symbol=symbol,
                 side=SIDE_SELL,
-                type=ORDER_TYPE_LIMIT,
-                timeInForce=TIME_IN_FORCE_GTC,
-                quantity=order['executedQty'],
-                price=tp_str
+                quantity=qty_str,
+                price=tp_str,
+                stopPrice=sl_str,
+                stopLimitPrice=sl_limit_str,
+                stopLimitTimeInForce=TIME_IN_FORCE_GTC
             )
             
             msg = (f"🚀 *ORDEN DE COMPRA EJECUTADA EN {symbol}*\n\n"
@@ -162,7 +170,7 @@ def analizar_y_operar(symbol):
 # ==========================================
 if __name__ == "__main__":
     ip_servidor = obtener_ip_publica()
-    msg_inicio = f"🤖 *BOT REINICIADO (CORRECCIÓN SALDO Y OCO)*\n\n📍 *IP de salida:* `{ip_servidor}`"
+    msg_inicio = f"🤖 *BOT REINICIADO (NATIVA OCO CON AJUSTE DE SALDO)*\n\n📍 *IP de salida:* `{ip_servidor}`"
     print(msg_inicio)
     enviar_telegram(msg_inicio)
     

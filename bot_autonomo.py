@@ -147,7 +147,7 @@ def analizar_y_operar(symbol):
         else:
             print(f"[-] Saldo insuficiente de USDT para operar en {symbol}.")
     else:
-        print(f"[i] {symbol}: Sin señal de compra (RSI: {rsi_actual:.1f} | SMA50: {sma_50:.6f} | SMA200: {sma_200:.6f})")
+        print(f"[i] {symbol}: Sin señal de compra (RSI: {rsi_actual:.1f} | SMA50: {sma_50:.8f} | SMA200: {sma_200:.8f})")
         
 # ==========================================
 # BUCLE PRINCIPAL

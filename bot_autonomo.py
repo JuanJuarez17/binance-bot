@@ -15,7 +15,7 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 SIMBOLOS = ["PEPEUSDT", "SUIUSDT", "NEARUSDT"]
 TIMEFRAME = "15m"         # Velas de 15 minutos
-MONTO_INVERSION = 10     # Mínimo permitido por Binance (MIN_NOTIONAL)
+MONTO_INVERSION = 10     # Mínimo permitido por Binance
 STOP_LOSS_PCT = 0.015    # 1.5%
 TAKE_PROFIT_PCT = 0.025   # 2.5%
 
@@ -129,7 +129,7 @@ def analizar_y_operar(symbol):
                 quoteOrderQty=MONTO_INVERSION
             )
             
-            # Obtención ultra segura de precio
+            # 1. Obtención ultra segura del precio de compra
             precio_compra = precio_actual
             if isinstance(order, dict) and order.get('fills') and len(order['fills']) > 0:
                 precio_compra = float(order['fills'][0]['price'])
@@ -141,23 +141,24 @@ def analizar_y_operar(symbol):
             sl_str = dar_formato_precio(symbol, stop_loss)
             sl_limit_str = dar_formato_precio(symbol, stop_loss * 0.995)
             
-            # Espera para asiento de comisión
+            # 2. Espera para asentamiento de saldo tras la comisión
             time.sleep(2.0)
             asset = symbol.replace("USDT", "")
             balance_disponible = float(client.get_asset_balance(asset=asset)["free"])
             qty_str = dar_formato_cantidad(symbol, balance_disponible)
             
-            # Envío de Orden OCO Estándar de la Librería python-binance
+            # 3. Envío directo mediante endpoint Raw para evitar incompatibilidades de la librería
             try:
-                client.create_oco_order(
-                    symbol=symbol,
-                    side=SIDE_SELL,
-                    quantity=qty_str,
-                    price=tp_str,
-                    stopPrice=sl_str,
-                    stopLimitPrice=sl_limit_str,
-                    stopLimitTimeInForce=TIME_IN_FORCE_GTC
-                )
+                params = {
+                    'symbol': symbol,
+                    'side': 'SELL',
+                    'quantity': qty_str,
+                    'price': tp_str,
+                    'stopPrice': sl_str,
+                    'stopLimitPrice': sl_limit_str,
+                    'stopLimitTimeInForce': 'GTC'
+                }
+                client._post('order/oco', data=params)
                 print(f"[+] Orden OCO creada exitosamente para {symbol}")
             except Exception as e_oco:
                 msg_oco_err = f"⚠️ *COMPRA EN {symbol} REALIZADA PERO FALLÓ OCO:* {e_oco}"
@@ -180,7 +181,7 @@ def analizar_y_operar(symbol):
 # ==========================================
 if __name__ == "__main__":
     ip_servidor = obtener_ip_publica()
-    msg_inicio = f"🤖 *BOT REINICIADO (SINTAXIS OCO ESTÁNDAR)*\n\n📍 *IP de salida:* `{ip_servidor}`"
+    msg_inicio = f"🤖 *BOT REINICIADO (ENDPOINT DIRETO OCO)*\n\n📍 *IP de salida:* `{ip_servidor}`"
     print(msg_inicio)
     enviar_telegram(msg_inicio)
     

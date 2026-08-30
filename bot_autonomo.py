@@ -56,7 +56,7 @@ if __name__ == "__main__":
     while True:
         for simbolo in SIMBOLOS:
             try:
-                analizar_y_operar(simbolo)
+                analizaryoperar(simbolo)
             except Exception as e:
                 msg_error = f"⚠️ *ERROR EN {simbolo}:* {e}"
                 print(msg_error)

@@ -129,7 +129,7 @@ def analizar_y_operar(symbol):
                 quoteOrderQty=MONTO_INVERSION
             )
             
-            # 1. Obtención ultra segura del precio de entrada (Evita 'list index out of range')
+            # Obtención segura del precio de compra (Protección contra 'list index out of range')
             precio_compra = precio_actual
             if isinstance(order, dict) and 'fills' in order and len(order['fills']) > 0:
                 precio_compra = float(order['fills'][0]['price'])
@@ -141,13 +141,13 @@ def analizar_y_operar(symbol):
             sl_str = dar_formato_precio(symbol, stop_loss)
             sl_limit_str = dar_formato_precio(symbol, stop_loss * 0.995)
             
-            # 2. Breve pausa para asegurar el asiento de la comisión en el balance
+            # Pausa breve para asegurar asentamiento del balance en Binance tras la comisión
             time.sleep(1.5)
             asset = symbol.replace("USDT", "")
             balance_disponible = float(client.get_asset_balance(asset=asset)["free"])
             qty_str = dar_formato_cantidad(symbol, balance_disponible)
             
-            # 3. Envío seguro de la Orden OCO Nativa
+            # Creación de Orden OCO protegida
             try:
                 client.create_oco_order(
                     symbol=symbol,
@@ -160,7 +160,7 @@ def analizar_y_operar(symbol):
                 )
                 print(f"[+] Orden OCO creada exitosamente para {symbol}")
             except Exception as e_oco:
-                msg_oco_err = f"⚠️ *COMPRA OK EN {symbol} PERO FALLÓ OCO:* {e_oco}"
+                msg_oco_err = f"⚠️ *COMPRA EN {symbol} REALIZADA PERO FALLÓ OCO:* {e_oco}"
                 print(msg_oco_err)
                 enviar_telegram(msg_oco_err)
             
@@ -180,7 +180,7 @@ def analizar_y_operar(symbol):
 # ==========================================
 if __name__ == "__main__":
     ip_servidor = obtener_ip_publica()
-    msg_inicio = f"🤖 *BOT REINICIADO (NATIVA OCO CON AJUSTE DE SALDO)*\n\n📍 *IP de salida:* `{ip_servidor}`"
+    msg_inicio = f"🤖 *BOT REINICIADO (SINTAXIS OCO Y PRECIO SEGURO)*\n\n📍 *IP de salida:* `{ip_servidor}`"
     print(msg_inicio)
     enviar_telegram(msg_inicio)
     

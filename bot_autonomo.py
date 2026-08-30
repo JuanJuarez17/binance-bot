@@ -15,15 +15,14 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 SIMBOLOS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
 TIMEFRAME = "1h"
-MONTO_INVERSION = 20
-STOP_LOSS_PCT = 0.05
-TAKE_PROFIT_PCT = 0.10
+MONTO_INVERSION = 20     # USDT por operación
+STOP_LOSS_PCT = 0.05     # 5%
+TAKE_PROFIT_PCT = 0.10   # 10%
 
 # ==========================================
-# FUNCIONES AUXILIARES Y OBTENCIÓN DE IP
+# FUNCIONES AUXILIARES
 # ==========================================
 def obtener_ip_publica():
-    """Consulta la IP pública exacta desde la que opera el servidor"""
     try:
         ip = requests.get('https://api.ipify.org', timeout=5).text
         return ip
@@ -38,14 +37,91 @@ def enviar_telegram(mensaje):
     except Exception as e:
         print(f"[X] Error Telegram: {e}")
 
-# (Conserva las funciones obtener_datos_mercado, verificar_posicion_abierta y analizar_y_operar sin cambios)
+def obtener_datos_mercado(symbol, interval, limit=100):
+    klines = client.get_klines(symbol=symbol, interval=interval, limit=limit)
+    df = pd.DataFrame(klines, columns=[
+        'timestamp', 'open', 'high', 'low', 'close', 'volume',
+        'close_time', 'quote_asset_volume', 'number_of_trades',
+        'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'
+    ])
+    df['close'] = df['close'].astype(float)
+    df['high'] = df['high'].astype(float)
+    df['low'] = df['low'].astype(float)
+    return df
+
+def calcular_indicadores(df):
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['SMA_200'] = df['close'].rolling(window=200).mean()
+    
+    # RSI (14 periodos)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    return df
+
+def verificar_posicion_abierta(symbol):
+    asset = symbol.replace("USDT", "")
+    balance = float(client.get_asset_balance(asset=asset)["free"])
+    ticker_precio = float(client.get_symbol_ticker(symbol=symbol)["price"])
+    valor_en_usdt = balance * ticker_precio
+    return valor_en_usdt > 5.0
+
+def analizar_y_operar(symbol):
+    df = obtener_datos_mercado(symbol, TIMEFRAME)
+    df = calcular_indicadores(df)
+    
+    ultima_vela = df.iloc[-1]
+    precio_actual = ultima_vela['close']
+    rsi_actual = ultima_vela['RSI']
+    sma_50 = ultima_vela['SMA_50']
+    sma_200 = ultima_vela['SMA_200']
+    
+    posicion_activa = verificar_posicion_abierta(symbol)
+    
+    # Condición de Compra: Tendencia alcista (SMA50 > SMA200) y RSI en zona favorable (< 60)
+    if not posicion_activa:
+        if sma_50 > sma_200 and rsi_actual < 60:
+            saldo_usdt = float(client.get_asset_balance(asset="USDT")["free"])
+            if saldo_usdt >= MONTO_INVERSION:
+                order = client.create_order(
+                    symbol=symbol,
+                    side=SIDE_BUY,
+                    type=ORDER_TYPE_MARKET,
+                    quoteOrderQty=MONTO_INVERSION
+                )
+                
+                precio_compra = float(order['fills'][0]['price']) if order.get('fills') else precio_actual
+                stop_loss = precio_compra * (1 - STOP_LOSS_PCT)
+                take_profit = precio_compra * (1 + TAKE_PROFIT_PCT)
+                
+                # Configurar OCO Order (Stop Loss + Take Profit)
+                client.create_oco_order(
+                    symbol=symbol,
+                    side=SIDE_SELL,
+                    quantity=order['executedQty'],
+                    price=f"{take_profit:.2f}",
+                    stopPrice=f"{stop_loss:.2f}",
+                    stopLimitPrice=f"{stop_loss * 0.995:.2f}",
+                    stopLimitTimeInForce=TIME_IN_FORCE_GTC
+                )
+                
+                msg = (f"🚀 *ORDEN DE COMPRA EJECUTADA EN {symbol}*\n\n"
+                       f"• Precio Entrada: ${precio_compra:.2f}\n"
+                       f"• Take Profit: ${take_profit:.2f}\n"
+                       f"• Stop Loss: ${stop_loss:.2f}\n"
+                       f"• Inversión: ${MONTO_INVERSION} USDT")
+                enviar_telegram(msg)
+            else:
+                print(f"[-] Saldo insuficiente de USDT para operar en {symbol}.")
 
 # ==========================================
 # BUCLE PRINCIPAL
 # ==========================================
 if __name__ == "__main__":
     ip_servidor = obtener_ip_publica()
-    msg_inicio = f"🤖 *BOT INICIADO EN RAILWAY*\n\n📍 *IP de salida:* `{ip_servidor}`\n\nCopia esta IP y agrégala a las restricciones de tu API Key en Binance."
+    msg_inicio = f"🤖 *BOT INICIADO EN RAILWAY*\n\n📍 *IP de salida:* `{ip_servidor}`"
     print(msg_inicio)
     enviar_telegram(msg_inicio)
     

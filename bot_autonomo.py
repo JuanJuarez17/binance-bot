@@ -129,7 +129,11 @@ def analizar_y_operar(symbol):
                 quoteOrderQty=MONTO_INVERSION
             )
             
-            precio_compra = float(order['fills'][0]['price']) if order.get('fills') else precio_actual
+            # 1. Obtención ultra segura del precio de entrada (Evita 'list index out of range')
+            precio_compra = precio_actual
+            if isinstance(order, dict) and 'fills' in order and len(order['fills']) > 0:
+                precio_compra = float(order['fills'][0]['price'])
+                
             stop_loss = precio_compra * (1 - STOP_LOSS_PCT)
             take_profit = precio_compra * (1 + TAKE_PROFIT_PCT)
             
@@ -137,22 +141,28 @@ def analizar_y_operar(symbol):
             sl_str = dar_formato_precio(symbol, stop_loss)
             sl_limit_str = dar_formato_precio(symbol, stop_loss * 0.995)
             
-            # Ajustar la cantidad exacta disponible descontando comisiones
+            # 2. Breve pausa para asegurar el asiento de la comisión en el balance
+            time.sleep(1.5)
             asset = symbol.replace("USDT", "")
-            time.sleep(1) # Breve pausa para actualización de balance en Binance
             balance_disponible = float(client.get_asset_balance(asset=asset)["free"])
             qty_str = dar_formato_cantidad(symbol, balance_disponible)
             
-            # Orden OCO Nativa Unificada
-            client.create_oco_order(
-                symbol=symbol,
-                side=SIDE_SELL,
-                quantity=qty_str,
-                price=tp_str,
-                stopPrice=sl_str,
-                stopLimitPrice=sl_limit_str,
-                stopLimitTimeInForce=TIME_IN_FORCE_GTC
-            )
+            # 3. Envío seguro de la Orden OCO Nativa
+            try:
+                client.create_oco_order(
+                    symbol=symbol,
+                    side=SIDE_SELL,
+                    quantity=qty_str,
+                    price=tp_str,
+                    stopPrice=sl_str,
+                    stopLimitPrice=sl_limit_str,
+                    stopLimitTimeInForce=TIME_IN_FORCE_GTC
+                )
+                print(f"[+] Orden OCO creada exitosamente para {symbol}")
+            except Exception as e_oco:
+                msg_oco_err = f"⚠️ *COMPRA OK EN {symbol} PERO FALLÓ OCO:* {e_oco}"
+                print(msg_oco_err)
+                enviar_telegram(msg_oco_err)
             
             msg = (f"🚀 *ORDEN DE COMPRA EJECUTADA EN {symbol}*\n\n"
                    f"• Precio Entrada: ${dar_formato_precio(symbol, precio_compra)}\n"

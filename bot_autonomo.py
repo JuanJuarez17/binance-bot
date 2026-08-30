@@ -1,3 +1,4 @@
+import os
 import time
 import requests
 import pandas as pd
@@ -7,20 +8,21 @@ from binance.enums import *
 # ==========================================
 # CONFIGURACIÓN Y PARÁMETROS DEL BOT
 # ==========================================
-API_KEY = "YOUR_API_KEY"
-SECRET_KEY = "YOUR_SECRET_KEY"
+# Carga las claves desde las Variables de Entorno de Railway
+API_KEY = os.getenv("API_KEY")
+SECRET_KEY = os.getenv("SECRET_KEY")
 
-TELEGRAM_TOKEN = "YOUR_TELEGRAM_TOKEN"
-TELEGRAM_CHAT_ID = "YOUR_TELEGRAM_CHAT_ID"
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# Lista de pares a monitorear
+# Lista de pares a operar
 SIMBOLOS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
 TIMEFRAME = "1h"
 MONTO_INVERSION = 20     # USDT por cada operación
 STOP_LOSS_PCT = 0.05     # 5%
 TAKE_PROFIT_PCT = 0.10   # 10%
 
-# Conexión con Binance (Sincroniza el reloj del servidor automáticamente)
+# Conexión con Binance (Sincronización de reloj automática)
 client = Client(API_KEY, SECRET_KEY, requests_params={"timeout": 20})
 client.TIME_OFFSET = client.get_server_time()["serverTime"] - int(time.time() * 1000)
 

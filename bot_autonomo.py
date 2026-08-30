@@ -37,7 +37,7 @@ def enviar_telegram(mensaje):
     except Exception as e:
         print(f"[X] Error Telegram: {e}")
 
-def obtener_datos_mercado(symbol, interval, limit=100):
+def obtener_datos_mercado(symbol, interval, limit=300):
     klines = client.get_klines(symbol=symbol, interval=interval, limit=limit)
     df = pd.DataFrame(klines, columns=[
         'timestamp', 'open', 'high', 'low', 'close', 'volume',

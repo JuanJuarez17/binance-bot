@@ -6,16 +6,16 @@ from binance.client import Client
 from binance.enums import *
 
 # ==========================================
-# CONFIGURACIÓN Y PARÁMETROS DEL BOT
+# CONFIGURACIÓN (UN SOLO PAR PARA PRUEBAS)
 # ==========================================
 API_KEY = os.getenv("API_KEY")
 SECRET_KEY = os.getenv("SECRET_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-SIMBOLOS = ["PEPEUSDT", "SUIUSDT", "NEARUSDT"]
-TIMEFRAME = "15m"         # Velas de 15 minutos
-MONTO_INVERSION = 10     # Mínimo permitido por Binance
+SIMBOLO = "SUIUSDT"
+TIMEFRAME = "15m"
+MONTO_INVERSION = 10     # USDT
 STOP_LOSS_PCT = 0.015    # 1.5%
 TAKE_PROFIT_PCT = 0.025   # 2.5%
 
@@ -24,8 +24,7 @@ TAKE_PROFIT_PCT = 0.025   # 2.5%
 # ==========================================
 def obtener_ip_publica():
     try:
-        ip = requests.get('https://api.ipify.org', timeout=5).text
-        return ip
+        return requests.get('https://api.ipify.org', timeout=5).text
     except Exception:
         return "No disponible"
 
@@ -45,8 +44,6 @@ def obtener_datos_mercado(symbol, interval, limit=300):
         'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'
     ])
     df['close'] = df['close'].astype(float)
-    df['high'] = df['high'].astype(float)
-    df['low'] = df['low'].astype(float)
     return df
 
 def calcular_indicadores(df):
@@ -81,10 +78,7 @@ def dar_formato_precio(symbol, price):
     for f in info['filters']:
         if f['filterType'] == 'PRICE_FILTER':
             tick_size = float(f['tickSize'])
-            if tick_size < 1:
-                precision = len(str(tick_size).split('.')[1].rstrip('0'))
-            else:
-                precision = 0
+            precision = len(str(tick_size).split('.')[1].rstrip('0')) if tick_size < 1 else 0
             break
     return f"{price:.{precision}f}"
 
@@ -94,10 +88,7 @@ def dar_formato_cantidad(symbol, quantity):
     for f in info['filters']:
         if f['filterType'] == 'LOT_SIZE':
             step_size = float(f['stepSize'])
-            if step_size < 1:
-                precision = len(str(step_size).split('.')[1].rstrip('0'))
-            else:
-                precision = 0
+            precision = len(str(step_size).split('.')[1].rstrip('0')) if step_size < 1 else 0
             break
     return f"{quantity:.{precision}f}"
 
@@ -115,13 +106,14 @@ def analizar_y_operar(symbol):
     posicion_activa = verificar_posicion_abierta(symbol)
     
     if posicion_activa:
-        print(f"[-] Posición activa en {symbol} (Libre/Bloqueada). Omitiendo...")
+        print(f"[-] Posición activa en {symbol}. Omitiendo...")
         return
 
-    # Condición de Compra Intradía: SMA50 > SMA200 y RSI < 60
+    # Condición de Compra: SMA50 > SMA200 y RSI < 60
     if sma_50 > sma_200 and rsi_actual < 60:
         saldo_usdt = float(client.get_asset_balance(asset="USDT")["free"])
         if saldo_usdt >= MONTO_INVERSION:
+            print(f"[+] Ejecutando compra de {symbol}...")
             order = client.create_order(
                 symbol=symbol,
                 side=SIDE_BUY,
@@ -129,7 +121,7 @@ def analizar_y_operar(symbol):
                 quoteOrderQty=MONTO_INVERSION
             )
             
-            # 1. Obtención ultra segura del precio de compra
+            # Cálculo seguro del precio de entrada
             precio_compra = precio_actual
             if isinstance(order, dict) and order.get('fills') and len(order['fills']) > 0:
                 precio_compra = float(order['fills'][0]['price'])
@@ -141,25 +133,23 @@ def analizar_y_operar(symbol):
             sl_str = dar_formato_precio(symbol, stop_loss)
             sl_limit_str = dar_formato_precio(symbol, stop_loss * 0.995)
             
-            # 2. Espera para asentamiento de saldo tras la comisión
+            # Pausa para confirmar acreditación en billetera post-comisión
             time.sleep(2.0)
             asset = symbol.replace("USDT", "")
             balance_disponible = float(client.get_asset_balance(asset=asset)["free"])
             qty_str = dar_formato_cantidad(symbol, balance_disponible)
             
-            # 3. Envío directo mediante endpoint Raw para evitar incompatibilidades de la librería
+            # Método firmado nativo para la orden OCO de venta
             try:
-                params = {
-                    'symbol': symbol,
-                    'side': 'SELL',
-                    'quantity': qty_str,
-                    'price': tp_str,
-                    'stopPrice': sl_str,
-                    'stopLimitPrice': sl_limit_str,
-                    'stopLimitTimeInForce': 'GTC'
-                }
-                client._post('order/oco', data=params)
-                print(f"[+] Orden OCO creada exitosamente para {symbol}")
+                client.order_oco_sell(
+                    symbol=symbol,
+                    quantity=qty_str,
+                    price=tp_str,
+                    stopPrice=sl_str,
+                    stopLimitPrice=sl_limit_str,
+                    stopLimitTimeInForce=TIME_IN_FORCE_GTC
+                )
+                print(f"[+] Orden OCO creada exitosamente en {symbol}")
             except Exception as e_oco:
                 msg_oco_err = f"⚠️ *COMPRA EN {symbol} REALIZADA PERO FALLÓ OCO:* {e_oco}"
                 print(msg_oco_err)
@@ -172,30 +162,28 @@ def analizar_y_operar(symbol):
                    f"• Inversión: ${MONTO_INVERSION} USDT")
             enviar_telegram(msg)
         else:
-            print(f"[-] Saldo insuficiente de USDT para operar en {symbol}.")
+            print(f"[-] Saldo insuficiente de USDT.")
     else:
-        print(f"[i] {symbol}: Sin señal de compra (RSI: {rsi_actual:.1f} | SMA50: {sma_50:.8f} | SMA200: {sma_200:.8f})")
+        print(f"[i] {symbol}: Sin señal (RSI: {rsi_actual:.1f} | SMA50: {sma_50:.4f} | SMA200: {sma_200:.4f})")
 
 # ==========================================
 # BUCLE PRINCIPAL
 # ==========================================
 if __name__ == "__main__":
     ip_servidor = obtener_ip_publica()
-    msg_inicio = f"🤖 *BOT REINICIADO (ENDPOINT DIRETO OCO)*\n\n📍 *IP de salida:* `{ip_servidor}`"
+    msg_inicio = f"🤖 *BOT MODO PRUEBA (SUIUSDT UNICAMENTE)*\n\n📍 *IP de salida:* `{ip_servidor}`"
     print(msg_inicio)
     enviar_telegram(msg_inicio)
     
-    # Conexión con Binance
     client = Client(API_KEY, SECRET_KEY, requests_params={"timeout": 20})
     client.TIME_OFFSET = client.get_server_time()["serverTime"] - int(time.time() * 1000)
 
     while True:
-        for simbolo in SIMBOLOS:
-            try:
-                analizar_y_operar(simbolo)
-            except Exception as e:
-                msg_error = f"⚠️ *ERROR EN {simbolo}:* {e}"
-                print(msg_error)
-                enviar_telegram(msg_error)
+        try:
+            analizar_y_operar(SIMBOLO)
+        except Exception as e:
+            msg_error = f"⚠️ *ERROR EN {SIMBOLO}:* {e}"
+            print(msg_error)
+            enviar_telegram(msg_error)
         
         time.sleep(300)

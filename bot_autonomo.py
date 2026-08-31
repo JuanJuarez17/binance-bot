@@ -66,7 +66,8 @@ def verificar_posicion_abierta(symbol):
                 balance_total = float(b['free']) + float(b['locked'])
                 ticker_precio = float(client.get_symbol_ticker(symbol=symbol)["price"])
                 valor_en_usdt = balance_total * ticker_precio
-                return valor_en_usdt > 3.0
+                # Umbral elevado a $8.0 USDT para ignorar polvo o comisiones residuales
+                return valor_en_usdt > 8.0
         return False
     except Exception as e:
         print(f"[X] Error al verificar posición: {e}")

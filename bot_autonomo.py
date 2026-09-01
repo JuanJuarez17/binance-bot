@@ -119,7 +119,7 @@ def analizar_y_operar(symbol):
     if hay_senal:
         saldo_usdt = float(client.get_asset_balance(asset="USDT")["free"])
         if saldo_usdt >= MONTO_INVERSION:
-            print(f"[+] Ejecutando compra de {symbol}...")
+            print(f"[+] Ejecutando compra a mercado de {symbol}...")
             order = client.create_order(
                 symbol=symbol,
                 side=SIDE_BUY,
@@ -127,10 +127,10 @@ def analizar_y_operar(symbol):
                 quoteOrderQty=MONTO_INVERSION
             )
             
-            # Desactivar flag de prueba
+            # Desactivar el flag de prueba
             FORZAR_COMPRA_PRUEBA = False
             
-            # 1. Extracción 100% segura del precio de compra (Sin riesgo de IndexError)
+            # Asignación segura del precio de compra
             precio_compra = precio_actual
                 
             stop_loss = precio_compra * (1 - STOP_LOSS_PCT)
@@ -140,34 +140,40 @@ def analizar_y_operar(symbol):
             sl_str = dar_formato_precio(symbol, stop_loss)
             sl_limit_str = dar_formato_precio(symbol, stop_loss * 0.995)
             
-            # 2. Pausa para confirmación de balance en billetera
-            time.sleep(2.0)
+            # Pausa para asegurar la acreditación del balance libre tras la comisión
+            time.sleep(2.5)
             asset = symbol.replace("USDT", "")
             balance_disponible = float(client.get_asset_balance(asset=asset)["free"])
             qty_str = dar_formato_cantidad(symbol, balance_disponible)
             
-            # 3. Envío de Orden OCO
+            print(f"[+] Enviando OCO -> Cantidad: {qty_str} | TP: {tp_str} | SL Stop: {sl_str} | SL Limit: {sl_limit_str}")
+            
+            # Notificación inmediata de Compra en Telegram
+            msg_buy = (f"🚀 *ORDEN DE COMPRA EJECUTADA EN {symbol}*\n\n"
+                       f"• Precio Entrada: ${dar_formato_precio(symbol, precio_compra)}\n"
+                       f"• Take Profit (+2.5%): ${tp_str}\n"
+                       f"• Stop Loss (-1.5%): ${sl_str}\n"
+                       f"• Inversión: ${MONTO_INVERSION} USDT")
+            enviar_telegram(msg_buy)
+            
+            # Envío explícito de la Orden OCO
             try:
-                client.order_oco_sell(
+                res_oco = client.create_oco_order(
                     symbol=symbol,
+                    side=SIDE_SELL,
                     quantity=qty_str,
                     price=tp_str,
                     stopPrice=sl_str,
                     stopLimitPrice=sl_limit_str,
-                    stopLimitTimeInForce=TIME_IN_FORCE_GTC
+                    stopLimitTimeInForce=TIME_IN_FORCE_GTC,
+                    recvWindow=10000
                 )
-                print(f"[+] Orden OCO creada exitosamente en {symbol}")
+                print(f"[+] RESPUESTA OCO BINANCE: {res_oco}")
+                enviar_telegram(f"✅ *ORDEN OCO COLOCADA CON ÉXITO EN {symbol}*")
             except Exception as e_oco:
-                msg_oco_err = f"⚠️ *COMPRA EN {symbol} REALIZADA PERO FALLÓ OCO:* {e_oco}"
+                msg_oco_err = f"⚠️ *COMPRA EN {symbol} OK PERO FALLÓ LA OCO:* `{e_oco}`"
                 print(msg_oco_err)
                 enviar_telegram(msg_oco_err)
-            
-            msg = (f"🚀 *ORDEN DE COMPRA EJECUTADA EN {symbol}*\n\n"
-                   f"• Precio Entrada: ${dar_formato_precio(symbol, precio_compra)}\n"
-                   f"• Take Profit (+2.5%): ${tp_str}\n"
-                   f"• Stop Loss (-1.5%): ${sl_str}\n"
-                   f"• Inversión: ${MONTO_INVERSION} USDT")
-            enviar_telegram(msg)
         else:
             print(f"[-] Saldo insuficiente de USDT.")
     else:

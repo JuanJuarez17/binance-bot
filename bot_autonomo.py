@@ -127,12 +127,15 @@ def analizar_y_operar(symbol):
                 quoteOrderQty=MONTO_INVERSION
             )
             
-            # Desactivar el flag para que no vuelva a forzar en el siguiente ciclo
+            # Desactivar flag de prueba
             FORZAR_COMPRA_PRUEBA = False
             
+            # 1. Extracción 100% segura del precio de compra (Sin riesgo de IndexError)
             precio_compra = precio_actual
-            if isinstance(order, dict) and order.get('fills') and len(order['fills']) > 0:
-                precio_compra = float(order['fills'][0]['price'])
+            if isinstance(order, dict):
+                fills = order.get('fills', [])
+                if len(fills) > 0 and 'price' in fills[0]:
+                    precio_compra = float(fills[0]['price'])
                 
             stop_loss = precio_compra * (1 - STOP_LOSS_PCT)
             take_profit = precio_compra * (1 + TAKE_PROFIT_PCT)
@@ -141,11 +144,13 @@ def analizar_y_operar(symbol):
             sl_str = dar_formato_precio(symbol, stop_loss)
             sl_limit_str = dar_formato_precio(symbol, stop_loss * 0.995)
             
+            # 2. Pausa para confirmación de balance en billetera
             time.sleep(2.0)
             asset = symbol.replace("USDT", "")
             balance_disponible = float(client.get_asset_balance(asset=asset)["free"])
             qty_str = dar_formato_cantidad(symbol, balance_disponible)
             
+            # 3. Envío de Orden OCO
             try:
                 client.order_oco_sell(
                     symbol=symbol,
@@ -171,7 +176,7 @@ def analizar_y_operar(symbol):
             print(f"[-] Saldo insuficiente de USDT.")
     else:
         print(f"[i] {symbol}: Sin señal (RSI: {rsi_actual:.1f} | SMA50: {sma_50:.4f} | SMA200: {sma_200:.4f})")
-
+        
 # ==========================================
 # BUCLE PRINCIPAL
 # ==========================================

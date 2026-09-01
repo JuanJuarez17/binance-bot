@@ -74,27 +74,40 @@ def verificar_posicion_abierta(symbol):
         print(f"[X] Error al verificar posición: {e}")
         return False
 
+import math
+
 def dar_formato_precio(symbol, price):
-    info = client.get_symbol_info(symbol)
-    precision = 2
-    for f in info['filters']:
-        if f['filterType'] == 'PRICE_FILTER':
-            tick_size = float(f['tickSize'])
-            precision = len(str(tick_size).split('.')[1].rstrip('0')) if tick_size < 1 else 0
-            break
-    return f"{price:.{precision}f}"
+    try:
+        info = client.get_symbol_info(symbol)
+        for f in info['filters']:
+            if f['filterType'] == 'PRICE_FILTER':
+                tick_size = float(f['tickSize'])
+                if tick_size < 1:
+                    # Método matemático inmune a notación científica (1e-08)
+                    precision = int(round(-math.log10(tick_size)))
+                else:
+                    precision = 0
+                return f"{price:.{precision}f}"
+        return f"{price:.8f}"
+    except Exception:
+        return f"{price:.8f}"
 
 dar_formato_precio_seguro = dar_formato_precio
 
 def dar_formato_cantidad(symbol, quantity):
-    info = client.get_symbol_info(symbol)
-    precision = 0
-    for f in info['filters']:
-        if f['filterType'] == 'LOT_SIZE':
-            step_size = float(f['stepSize'])
-            precision = len(str(step_size).split('.')[1].rstrip('0')) if step_size < 1 else 0
-            break
-    return f"{quantity:.{precision}f}"
+    try:
+        info = client.get_symbol_info(symbol)
+        for f in info['filters']:
+            if f['filterType'] == 'LOT_SIZE':
+                step_size = float(f['stepSize'])
+                if step_size < 1:
+                    precision = int(round(-math.log10(step_size)))
+                else:
+                    precision = 0
+                return f"{quantity:.{precision}f}"
+        return f"{quantity:.0f}"
+    except Exception:
+        return f"{quantity:.0f}"
 
 def analizar_y_operar(symbol):
     global FORZAR_COMPRA_PRUEBA

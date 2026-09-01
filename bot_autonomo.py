@@ -6,18 +6,21 @@ from binance.client import Client
 from binance.enums import *
 
 # ==========================================
-# CONFIGURACIÓN (UN SOLO PAR PARA PRUEBAS)
+# CONFIGURACIÓN DE PRUEBA
 # ==========================================
 API_KEY = os.getenv("API_KEY")
 SECRET_KEY = os.getenv("SECRET_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-SIMBOLO = "SUIUSDT"
+SIMBOLO = "PEPEUSDT"       # Par cambiado para la prueba
 TIMEFRAME = "15m"
 MONTO_INVERSION = 10     # USDT
 STOP_LOSS_PCT = 0.015    # 1.5%
 TAKE_PROFIT_PCT = 0.025   # 2.5%
+
+# Si se define en True, forzará la compra en el primer ciclo para validar la OCO
+FORZAR_COMPRA_PRUEBA = True  
 
 # ==========================================
 # FUNCIONES AUXILIARES
@@ -66,7 +69,6 @@ def verificar_posicion_abierta(symbol):
                 balance_total = float(b['free']) + float(b['locked'])
                 ticker_precio = float(client.get_symbol_ticker(symbol=symbol)["price"])
                 valor_en_usdt = balance_total * ticker_precio
-                # Umbral elevado a $8.0 USDT para ignorar polvo o comisiones residuales
                 return valor_en_usdt > 8.0
         return False
     except Exception as e:
@@ -94,6 +96,7 @@ def dar_formato_cantidad(symbol, quantity):
     return f"{quantity:.{precision}f}"
 
 def analizar_y_operar(symbol):
+    global FORZAR_COMPRA_PRUEBA
     print(f"--- Analizando {symbol} [{time.strftime('%H:%M:%S')}] ---")
     df = obtener_datos_mercado(symbol, TIMEFRAME)
     df = calcular_indicadores(df)
@@ -110,8 +113,10 @@ def analizar_y_operar(symbol):
         print(f"[-] Posición activa en {symbol}. Omitiendo...")
         return
 
-    # Condición de Compra: SMA50 > SMA200 y RSI < 60
-    if sma_50 > sma_200 and rsi_actual < 60:
+    # Evaluar señal normal o forzada de prueba
+    hay_senal = (sma_50 > sma_200 and rsi_actual < 60) or FORZAR_COMPRA_PRUEBA
+
+    if hay_senal:
         saldo_usdt = float(client.get_asset_balance(asset="USDT")["free"])
         if saldo_usdt >= MONTO_INVERSION:
             print(f"[+] Ejecutando compra de {symbol}...")
@@ -122,7 +127,9 @@ def analizar_y_operar(symbol):
                 quoteOrderQty=MONTO_INVERSION
             )
             
-            # Cálculo seguro del precio de entrada
+            # Desactivar el flag para que no vuelva a forzar en el siguiente ciclo
+            FORZAR_COMPRA_PRUEBA = False
+            
             precio_compra = precio_actual
             if isinstance(order, dict) and order.get('fills') and len(order['fills']) > 0:
                 precio_compra = float(order['fills'][0]['price'])
@@ -134,13 +141,11 @@ def analizar_y_operar(symbol):
             sl_str = dar_formato_precio(symbol, stop_loss)
             sl_limit_str = dar_formato_precio(symbol, stop_loss * 0.995)
             
-            # Pausa para confirmar acreditación en billetera post-comisión
             time.sleep(2.0)
             asset = symbol.replace("USDT", "")
             balance_disponible = float(client.get_asset_balance(asset=asset)["free"])
             qty_str = dar_formato_cantidad(symbol, balance_disponible)
             
-            # Método firmado nativo para la orden OCO de venta
             try:
                 client.order_oco_sell(
                     symbol=symbol,
@@ -172,7 +177,7 @@ def analizar_y_operar(symbol):
 # ==========================================
 if __name__ == "__main__":
     ip_servidor = obtener_ip_publica()
-    msg_inicio = f"🤖 *BOT MODO PRUEBA (SUIUSDT UNICAMENTE)*\n\n📍 *IP de salida:* `{ip_servidor}`"
+    msg_inicio = f"🤖 *BOT MODO PRUEBA DE OCO ({SIMBOLO})*\n\n📍 *IP de salida:* `{ip_servidor}`"
     print(msg_inicio)
     enviar_telegram(msg_inicio)
     

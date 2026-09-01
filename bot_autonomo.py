@@ -132,10 +132,6 @@ def analizar_y_operar(symbol):
             
             # 1. Extracción 100% segura del precio de compra (Sin riesgo de IndexError)
             precio_compra = precio_actual
-            if isinstance(order, dict):
-                fills = order.get('fills', [])
-                if len(fills) > 0 and 'price' in fills[0]:
-                    precio_compra = float(fills[0]['price'])
                 
             stop_loss = precio_compra * (1 - STOP_LOSS_PCT)
             take_profit = precio_compra * (1 + TAKE_PROFIT_PCT)

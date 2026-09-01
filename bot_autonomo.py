@@ -167,7 +167,7 @@ def analizar_y_operar(symbol):
                        f"• Inversión: ${MONTO_INVERSION} USDT")
             enviar_telegram(msg_buy)
             
-            # 4. Creación y envío de la orden OCO
+            # 4. Creación y envío de la orden OCO con tipos explícitos
             try:
                 res_oco = client.create_oco_order(
                     symbol=symbol,
@@ -177,6 +177,8 @@ def analizar_y_operar(symbol):
                     stopPrice=sl_str,
                     stopLimitPrice=sl_limit_str,
                     stopLimitTimeInForce=TIME_IN_FORCE_GTC,
+                    aboveType='LIMIT_MAKER',
+                    belowType='STOP_LOSS_LIMIT',
                     recvWindow=10000
                 )
                 print(f"[+] RESPUESTA OCO BINANCE: {res_oco}")

@@ -84,6 +84,8 @@ def dar_formato_precio(symbol, price):
             break
     return f"{price:.{precision}f}"
 
+dar_formato_precio_seguro = dar_formato_precio
+
 def dar_formato_cantidad(symbol, quantity):
     info = client.get_symbol_info(symbol)
     precision = 0
@@ -100,11 +102,10 @@ def analizar_y_operar(symbol):
     df = obtener_datos_mercado(symbol, TIMEFRAME)
     df = calcular_indicadores(df)
     
-    ultima_vela = df.iloc[-1]
-    precio_actual = ultima_vela['close']
-    rsi_actual = ultima_vela['RSI']
-    sma_50 = ultima_vela['SMA_50']
-    sma_200 = ultima_vela['SMA_200']
+    precio_actual = float(df['close'].iloc[-1])
+    rsi_actual = float(df['RSI'].iloc[-1])
+    sma_50 = float(df['SMA_50'].iloc[-1])
+    sma_200 = float(df['SMA_200'].iloc[-1])
     
     posicion_activa = verificar_posicion_abierta(symbol)
     
@@ -118,6 +119,8 @@ def analizar_y_operar(symbol):
         saldo_usdt = float(client.get_asset_balance(asset="USDT")["free"])
         if saldo_usdt >= MONTO_INVERSION:
             print(f"[+] Ejecutando compra a mercado de {symbol}...")
+            
+            # Ejecución de la orden
             order = client.create_order(
                 symbol=symbol,
                 side=SIDE_BUY,
@@ -127,15 +130,15 @@ def analizar_y_operar(symbol):
             
             FORZAR_COMPRA_PRUEBA = False
             
-            # Asignación de precio directa sin acceder a arreglos o fills
+            # Tomamos el precio de la vela sin acceder a ninguna lista
             precio_compra = precio_actual
                 
             stop_loss = precio_compra * (1 - STOP_LOSS_PCT)
             take_profit = precio_compra * (1 + TAKE_PROFIT_PCT)
             
-            tp_str = dar_formato_precio(symbol, take_profit)
-            sl_str = dar_formato_precio(symbol, stop_loss)
-            sl_limit_str = dar_formato_precio(symbol, stop_loss * 0.995)
+            tp_str = dar_formato_precio_seguro(symbol, take_profit)
+            sl_str = dar_formato_precio_seguro(symbol, stop_loss)
+            sl_limit_str = dar_formato_precio_seguro(symbol, stop_loss * 0.995)
             
             time.sleep(2.5)
             asset = symbol.replace("USDT", "")
@@ -145,7 +148,7 @@ def analizar_y_operar(symbol):
             print(f"[+] Enviando OCO -> Qty: {qty_str} | TP: {tp_str} | SL Stop: {sl_str} | SL Limit: {sl_limit_str}")
             
             msg_buy = (f"🚀 *ORDEN DE COMPRA EJECUTADA EN {symbol}*\n\n"
-                       f"• Precio Entrada: ${dar_formato_precio(symbol, precio_compra)}\n"
+                       f"• Precio Entrada: ${dar_formato_precio_seguro(symbol, precio_compra)}\n"
                        f"• Take Profit (+2.5%): ${tp_str}\n"
                        f"• Stop Loss (-1.5%): ${sl_str}\n"
                        f"• Inversión: ${MONTO_INVERSION} USDT")
@@ -178,7 +181,7 @@ def analizar_y_operar(symbol):
 # ==========================================
 if __name__ == "__main__":
     ip_servidor = obtener_ip_publica()
-    msg_inicio = f"🤖 *BOT REINICIADO (MODO LOGS OCO DETALLADO)*\n\n📍 *IP de salida:* `{ip_servidor}`"
+    msg_inicio = f"🤖 *BOT REINICIADO (CORRECCIÓN TOTAL INDEX ERROR)*\n\n📍 *IP de salida:* `{ip_servidor}`"
     print(msg_inicio)
     enviar_telegram(msg_inicio)
     

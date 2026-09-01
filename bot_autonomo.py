@@ -13,13 +13,12 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-SIMBOLO = "PEPEUSDT"       # Par cambiado para la prueba
+SIMBOLO = "PEPEUSDT"
 TIMEFRAME = "15m"
 MONTO_INVERSION = 10     # USDT
 STOP_LOSS_PCT = 0.015    # 1.5%
 TAKE_PROFIT_PCT = 0.025   # 2.5%
 
-# Si se define en True, forzará la compra en el primer ciclo para validar la OCO
 FORZAR_COMPRA_PRUEBA = True  
 
 # ==========================================
@@ -113,7 +112,6 @@ def analizar_y_operar(symbol):
         print(f"[-] Posición activa en {symbol}. Omitiendo...")
         return
 
-    # Evaluar señal normal o forzada de prueba
     hay_senal = (sma_50 > sma_200 and rsi_actual < 60) or FORZAR_COMPRA_PRUEBA
 
     if hay_senal:
@@ -127,10 +125,9 @@ def analizar_y_operar(symbol):
                 quoteOrderQty=MONTO_INVERSION
             )
             
-            # Desactivar el flag de prueba
             FORZAR_COMPRA_PRUEBA = False
             
-            # Asignación segura del precio de compra
+            # Asignación de precio directa sin acceder a arreglos o fills
             precio_compra = precio_actual
                 
             stop_loss = precio_compra * (1 - STOP_LOSS_PCT)
@@ -140,15 +137,13 @@ def analizar_y_operar(symbol):
             sl_str = dar_formato_precio(symbol, stop_loss)
             sl_limit_str = dar_formato_precio(symbol, stop_loss * 0.995)
             
-            # Pausa para asegurar la acreditación del balance libre tras la comisión
             time.sleep(2.5)
             asset = symbol.replace("USDT", "")
             balance_disponible = float(client.get_asset_balance(asset=asset)["free"])
             qty_str = dar_formato_cantidad(symbol, balance_disponible)
             
-            print(f"[+] Enviando OCO -> Cantidad: {qty_str} | TP: {tp_str} | SL Stop: {sl_str} | SL Limit: {sl_limit_str}")
+            print(f"[+] Enviando OCO -> Qty: {qty_str} | TP: {tp_str} | SL Stop: {sl_str} | SL Limit: {sl_limit_str}")
             
-            # Notificación inmediata de Compra en Telegram
             msg_buy = (f"🚀 *ORDEN DE COMPRA EJECUTADA EN {symbol}*\n\n"
                        f"• Precio Entrada: ${dar_formato_precio(symbol, precio_compra)}\n"
                        f"• Take Profit (+2.5%): ${tp_str}\n"
@@ -156,7 +151,6 @@ def analizar_y_operar(symbol):
                        f"• Inversión: ${MONTO_INVERSION} USDT")
             enviar_telegram(msg_buy)
             
-            # Envío explícito de la Orden OCO
             try:
                 res_oco = client.create_oco_order(
                     symbol=symbol,
@@ -178,13 +172,13 @@ def analizar_y_operar(symbol):
             print(f"[-] Saldo insuficiente de USDT.")
     else:
         print(f"[i] {symbol}: Sin señal (RSI: {rsi_actual:.1f} | SMA50: {sma_50:.4f} | SMA200: {sma_200:.4f})")
-        
+
 # ==========================================
 # BUCLE PRINCIPAL
 # ==========================================
 if __name__ == "__main__":
     ip_servidor = obtener_ip_publica()
-    msg_inicio = f"🤖 *BOT MODO PRUEBA DE OCO ({SIMBOLO})*\n\n📍 *IP de salida:* `{ip_servidor}`"
+    msg_inicio = f"🤖 *BOT REINICIADO (MODO LOGS OCO DETALLADO)*\n\n📍 *IP de salida:* `{ip_servidor}`"
     print(msg_inicio)
     enviar_telegram(msg_inicio)
     

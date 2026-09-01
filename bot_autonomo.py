@@ -120,7 +120,7 @@ def analizar_y_operar(symbol):
         if saldo_usdt >= MONTO_INVERSION:
             print(f"[+] Ejecutando compra a mercado de {symbol}...")
             
-            # Ejecución de la orden
+            # 1. Ejecución de la orden de compra a mercado
             order = client.create_order(
                 symbol=symbol,
                 side=SIDE_BUY,
@@ -130,16 +130,16 @@ def analizar_y_operar(symbol):
             
             FORZAR_COMPRA_PRUEBA = False
             
-            # Tomamos el precio de la vela sin acceder a ninguna lista
+            # 2. Cálculo de precios e hito de variables (NECESARIO ANTES DE LA OCO)
             precio_compra = precio_actual
-                
             stop_loss = precio_compra * (1 - STOP_LOSS_PCT)
             take_profit = precio_compra * (1 + TAKE_PROFIT_PCT)
             
-            tp_str = dar_formato_precio_seguro(symbol, take_profit)
-            sl_str = dar_formato_precio_seguro(symbol, stop_loss)
-            sl_limit_str = dar_formato_precio_seguro(symbol, stop_loss * 0.995)
+            tp_str = dar_formato_precio(symbol, take_profit)
+            sl_str = dar_formato_precio(symbol, stop_loss)
+            sl_limit_str = dar_formato_precio(symbol, stop_loss * 0.995)
             
+            # 3. Pausa y formateo de la cantidad disponible tras comisiones
             time.sleep(2.5)
             asset = symbol.replace("USDT", "")
             balance_disponible = float(client.get_asset_balance(asset=asset)["free"])
@@ -148,12 +148,13 @@ def analizar_y_operar(symbol):
             print(f"[+] Enviando OCO -> Qty: {qty_str} | TP: {tp_str} | SL Stop: {sl_str} | SL Limit: {sl_limit_str}")
             
             msg_buy = (f"🚀 *ORDEN DE COMPRA EJECUTADA EN {symbol}*\n\n"
-                       f"• Precio Entrada: ${dar_formato_precio_seguro(symbol, precio_compra)}\n"
+                       f"• Precio Entrada: ${dar_formato_precio(symbol, precio_compra)}\n"
                        f"• Take Profit (+2.5%): ${tp_str}\n"
                        f"• Stop Loss (-1.5%): ${sl_str}\n"
                        f"• Inversión: ${MONTO_INVERSION} USDT")
             enviar_telegram(msg_buy)
             
+            # 4. Creación y envío de la orden OCO
             try:
                 res_oco = client.create_oco_order(
                     symbol=symbol,

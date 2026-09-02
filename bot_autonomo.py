@@ -167,17 +167,18 @@ def analizar_y_operar(symbol):
                        f"• Inversión: ${MONTO_INVERSION} USDT")
             enviar_telegram(msg_buy)
             
-            # 4. Creación y envío de la orden OCO con parámetros nativos firmados
+            # 4. Creación de la orden OCO vía solicitud HTTP directa firmada por Binance
             try:
-                res_oco = client.create_oco_order(
-                    symbol=symbol,
-                    side=SIDE_SELL,
-                    quantity=qty_str,
-                    price=tp_str,
-                    stopPrice=sl_str,
-                    stopLimitPrice=sl_limit_str,
-                    stopLimitTimeInForce='GTC'
-                )
+                params = {
+                    'symbol': symbol,
+                    'side': 'SELL',
+                    'quantity': qty_str,
+                    'price': tp_str,
+                    'stopPrice': sl_str,
+                    'stopLimitPrice': sl_limit_str,
+                    'stopLimitTimeInForce': 'GTC'
+                }
+                res_oco = client._request_api('post', 'order/oco', signed=True, data=params)
                 print(f"[+] RESPUESTA OCO BINANCE: {res_oco}")
                 enviar_telegram(f"✅ *ORDEN OCO COLOCADA CON ÉXITO EN {symbol}*")
             except Exception as e_oco:

@@ -1,25 +1,24 @@
 import os
 import time
+import math
 import requests
 import pandas as pd
 from binance.client import Client
 from binance.enums import *
 
 # ==========================================
-# CONFIGURACIÓN DE PRUEBA
+# CONFIGURACIÓN DE PRODUCCIÓN
 # ==========================================
 API_KEY = os.getenv("API_KEY")
 SECRET_KEY = os.getenv("SECRET_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-SIMBOLO = "PEPEUSDT"
+SIMBOLOS = ["PEPEUSDT", "SUIUSDT", "NEARUSDT"]
 TIMEFRAME = "15m"
 MONTO_INVERSION = 10     # USDT
 STOP_LOSS_PCT = 0.015    # 1.5%
 TAKE_PROFIT_PCT = 0.025   # 2.5%
-
-FORZAR_COMPRA_PRUEBA = True  
 
 # ==========================================
 # FUNCIONES AUXILIARES
@@ -74,8 +73,6 @@ def verificar_posicion_abierta(symbol):
         print(f"[X] Error al verificar posición: {e}")
         return False
 
-import math
-
 def dar_formato_precio(symbol, price):
     try:
         info = client.get_symbol_info(symbol)
@@ -83,7 +80,6 @@ def dar_formato_precio(symbol, price):
             if f['filterType'] == 'PRICE_FILTER':
                 tick_size = float(f['tickSize'])
                 if tick_size < 1:
-                    # Método matemático inmune a notación científica (1e-08)
                     precision = int(round(-math.log10(tick_size)))
                 else:
                     precision = 0
@@ -91,8 +87,6 @@ def dar_formato_precio(symbol, price):
         return f"{price:.8f}"
     except Exception:
         return f"{price:.8f}"
-
-dar_formato_precio_seguro = dar_formato_precio
 
 def dar_formato_cantidad(symbol, quantity):
     try:
@@ -110,7 +104,6 @@ def dar_formato_cantidad(symbol, quantity):
         return f"{quantity:.0f}"
 
 def analizar_y_operar(symbol):
-    global FORZAR_COMPRA_PRUEBA
     print(f"--- Analizando {symbol} [{time.strftime('%H:%M:%S')}] ---")
     df = obtener_datos_mercado(symbol, TIMEFRAME)
     df = calcular_indicadores(df)
@@ -126,14 +119,12 @@ def analizar_y_operar(symbol):
         print(f"[-] Posición activa en {symbol}. Omitiendo...")
         return
 
-    hay_senal = (sma_50 > sma_200 and rsi_actual < 60) or FORZAR_COMPRA_PRUEBA
-
-    if hay_senal:
+    # Condición de estrategia: SMA50 > SMA200 y RSI < 60
+    if sma_50 > sma_200 and rsi_actual < 60:
         saldo_usdt = float(client.get_asset_balance(asset="USDT")["free"])
         if saldo_usdt >= MONTO_INVERSION:
             print(f"[+] Ejecutando compra a mercado de {symbol}...")
             
-            # 1. Ejecución de la orden de compra a mercado
             order = client.create_order(
                 symbol=symbol,
                 side=SIDE_BUY,
@@ -141,9 +132,6 @@ def analizar_y_operar(symbol):
                 quoteOrderQty=MONTO_INVERSION
             )
             
-            FORZAR_COMPRA_PRUEBA = False
-            
-            # 2. Cálculo de precios e hito de variables (NECESARIO ANTES DE LA OCO)
             precio_compra = precio_actual
             stop_loss = precio_compra * (1 - STOP_LOSS_PCT)
             take_profit = precio_compra * (1 + TAKE_PROFIT_PCT)
@@ -152,7 +140,6 @@ def analizar_y_operar(symbol):
             sl_str = dar_formato_precio(symbol, stop_loss)
             sl_limit_str = dar_formato_precio(symbol, stop_loss * 0.995)
             
-            # 3. Pausa y formateo de la cantidad disponible tras comisiones
             time.sleep(2.5)
             asset = symbol.replace("USDT", "")
             balance_disponible = float(client.get_asset_balance(asset=asset)["free"])
@@ -167,7 +154,6 @@ def analizar_y_operar(symbol):
                        f"• Inversión: ${MONTO_INVERSION} USDT")
             enviar_telegram(msg_buy)
             
-            # 4. Creación de la orden OCO vía solicitud HTTP directa firmada por Binance
             try:
                 params = {
                     'symbol': symbol,
@@ -195,7 +181,7 @@ def analizar_y_operar(symbol):
 # ==========================================
 if __name__ == "__main__":
     ip_servidor = obtener_ip_publica()
-    msg_inicio = f"🤖 *BOT REINICIADO (CORRECCIÓN TOTAL INDEX ERROR)*\n\n📍 *IP de salida:* `{ip_servidor}`"
+    msg_inicio = f"🤖 *BOT EN PRODUCCIÓN CONTINUA (PEPE / SUI / NEAR)*\n\n📍 *IP de salida:* `{ip_servidor}`"
     print(msg_inicio)
     enviar_telegram(msg_inicio)
     
@@ -203,11 +189,12 @@ if __name__ == "__main__":
     client.TIME_OFFSET = client.get_server_time()["serverTime"] - int(time.time() * 1000)
 
     while True:
-        try:
-            analizar_y_operar(SIMBOLO)
-        except Exception as e:
-            msg_error = f"⚠️ *ERROR EN {SIMBOLO}:* {e}"
-            print(msg_error)
-            enviar_telegram(msg_error)
+        for simbolo in SIMBOLOS:
+            try:
+                analizar_y_operar(simbolo)
+            except Exception as e:
+                msg_error = f"⚠️ *ERROR EN {simbolo}:* {e}"
+                print(msg_error)
+                enviar_telegram(msg_error)
         
         time.sleep(300)

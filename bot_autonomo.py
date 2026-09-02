@@ -167,17 +167,21 @@ def analizar_y_operar(symbol):
                        f"• Inversión: ${MONTO_INVERSION} USDT")
             enviar_telegram(msg_buy)
             
-            # 4. Creación y envío de la orden OCO utilizando el método nativo de venta
+           # 4. Creación y envío de la orden OCO mediante endpoint directo firmado
             try:
-                res_oco = client.order_oco_sell(
-                    symbol=symbol,
-                    quantity=qty_str,
-                    price=tp_str,
-                    stopPrice=sl_str,
-                    stopLimitPrice=sl_limit_str,
-                    stopLimitTimeInForce=TIME_IN_FORCE_GTC,
-                    recvWindow=10000
-                )
+                params = {
+                    'symbol': symbol,
+                    'side': 'SELL',
+                    'quantity': qty_str,
+                    'price': tp_str,
+                    'aboveType': 'LIMIT_MAKER',
+                    'stopPrice': sl_str,
+                    'stopLimitPrice': sl_limit_str,
+                    'stopLimitTimeInForce': 'GTC',
+                    'belowType': 'STOP_LOSS_LIMIT',
+                    'recvWindow': 10000
+                }
+                res_oco = client._post('order/oco', data=params, signed=True)
                 print(f"[+] RESPUESTA OCO BINANCE: {res_oco}")
                 enviar_telegram(f"✅ *ORDEN OCO COLOCADA CON ÉXITO EN {symbol}*")
             except Exception as e_oco:

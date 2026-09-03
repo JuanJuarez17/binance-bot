@@ -140,10 +140,14 @@ def analizar_y_operar(symbol):
             sl_str = dar_formato_precio(symbol, stop_loss)
             sl_limit_str = dar_formato_precio(symbol, stop_loss * 0.995)
             
-            time.sleep(2.5)
+            # Pausa de seguridad
+            time.sleep(3.0)
             asset = symbol.replace("USDT", "")
             balance_disponible = float(client.get_asset_balance(asset=asset)["free"])
-            qty_str = dar_formato_cantidad(symbol, balance_disponible)
+            
+            # Aplicación de margen de seguridad del 0.05% para evitar error de saldo por comisiones
+            balance_seguro = balance_disponible * 0.9995
+            qty_str = dar_formato_cantidad(symbol, balance_seguro)
             
             print(f"[+] Enviando OCO -> Qty: {qty_str} | TP: {tp_str} | SL Stop: {sl_str} | SL Limit: {sl_limit_str}")
             

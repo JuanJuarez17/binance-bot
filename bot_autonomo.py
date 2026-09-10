@@ -7,18 +7,19 @@ from binance.client import Client
 from binance.enums import *
 
 # ==========================================
-# CONFIGURACIÓN DE PRODUCCIÓN
+# CONFIGURACIÓN DE PRODUCCIÓN OPTIMIZADA
 # ==========================================
 API_KEY = os.getenv("API_KEY")
 SECRET_KEY = os.getenv("SECRET_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-SIMBOLOS = ["PEPEUSDT", "SUIUSDT", "NEARUSDT"]
+SIMBOLOS = ["SOLUSDT", "SUIUSDT", "NEARUSDT"]
 TIMEFRAME = "15m"
-MONTO_INVERSION = 10     # USDT
+MONTO_INVERSION = 16     # USDT
 STOP_LOSS_PCT = 0.015    # 1.5%
 TAKE_PROFIT_PCT = 0.025   # 2.5%
+RSI_UMBRAL = 55           # Ajuste de filtro para evitar entradas sobrecompradas
 
 # ==========================================
 # FUNCIONES AUXILIARES
@@ -119,11 +120,11 @@ def analizar_y_operar(symbol):
         print(f"[-] Posición activa en {symbol}. Omitiendo...")
         return
 
-    # Condición de estrategia: SMA50 > SMA200 y RSI < 60
-    if sma_50 > sma_200 and rsi_actual < 60:
+    # Estrategia optimizada: SMA50 > SMA200 y RSI < 55
+    if sma_50 > sma_200 and rsi_actual < RSI_UMBRAL:
         saldo_usdt = float(client.get_asset_balance(asset="USDT")["free"])
         if saldo_usdt >= MONTO_INVERSION:
-            print(f"[+] Ejecutando compra a mercado de {symbol}...")
+            print(f"[+] Ejecutando compra a mercado de {symbol} por ${MONTO_INVERSION} USDT...")
             
             order = client.create_order(
                 symbol=symbol,
@@ -140,12 +141,12 @@ def analizar_y_operar(symbol):
             sl_str = dar_formato_precio(symbol, stop_loss)
             sl_limit_str = dar_formato_precio(symbol, stop_loss * 0.995)
             
-            # Pausa de seguridad
+            # Pausa de seguridad para liberación del balance
             time.sleep(3.0)
             asset = symbol.replace("USDT", "")
             balance_disponible = float(client.get_asset_balance(asset=asset)["free"])
             
-            # Aplicación de margen de seguridad del 0.05% para evitar error de saldo por comisiones
+            # Margen del 0.05% para garantizar la colocación sin errores de saldo por comisiones
             balance_seguro = balance_disponible * 0.9995
             qty_str = dar_formato_cantidad(symbol, balance_seguro)
             
@@ -185,7 +186,11 @@ def analizar_y_operar(symbol):
 # ==========================================
 if __name__ == "__main__":
     ip_servidor = obtener_ip_publica()
-    msg_inicio = f"🤖 *BOT EN PRODUCCIÓN CONTINUA (PEPE / SUI / NEAR)*\n\n📍 *IP de salida:* `{ip_servidor}`"
+    msg_inicio = (f"🤖 *BOT EN PRODUCCIÓN OPTIMIZADO*\n\n"
+                  f"• Pares: `SOLUSDT`, `SUIUSDT`, `NEARUSDT`\n"
+                  f"• Inversión: `${MONTO_INVERSION} USDT`\n"
+                  f"• Filtro RSI: `< {RSI_UMBRAL}`\n"
+                  f"📍 *IP de salida:* `{ip_servidor}`")
     print(msg_inicio)
     enviar_telegram(msg_inicio)
     
